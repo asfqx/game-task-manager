@@ -1,0 +1,9 @@
+from jose.constants import ALGORITHMS
+
+
+AVATARS_BUCKET = "avatars"
+AI_MODELS = "ai-models"
+
+ALGORITHM = ALGORITHMS.HS256
+
+DEFAULT_RETRY_AFTER = 60
