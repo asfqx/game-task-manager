@@ -24,7 +24,7 @@ async def get_tasks(
     session: DBSession,
 ) -> list[TaskResponse]:
 
-    return list(
+    return TaskService.to_task_responses(
         await TaskService.get_tasks(
             current_user=user,
             filters=filters,

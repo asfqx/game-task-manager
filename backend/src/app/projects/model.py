@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core import Base
+
+if TYPE_CHECKING:
+    from app.invitations.model import Invitation
+    from app.teams.model import Team
+    from app.users.model import User
 
 
 class Project(Base):
@@ -16,9 +22,7 @@ class Project(Base):
     )
 
     title: Mapped[str] = mapped_column(String(255))
-
     description: Mapped[str | None] = mapped_column(Text())
-
     creator_uuid: Mapped[UUID] = mapped_column(
         ForeignKey("users.uuid", ondelete="CASCADE"),
     )
@@ -46,3 +50,15 @@ class Project(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    invitations: Mapped[list["Invitation"]] = relationship(
+        "Invitation",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    @property
+    def teams_count(self) -> int:
+
+        return len(self.teams)

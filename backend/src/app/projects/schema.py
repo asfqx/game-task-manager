@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.users.schema import UserShortResponse
 
@@ -29,6 +29,8 @@ class ProjectTeamSummaryResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ProjectResponse(BaseModel):
 
@@ -40,6 +42,8 @@ class ProjectResponse(BaseModel):
     teams_count: int
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProjectDetailResponse(ProjectResponse):

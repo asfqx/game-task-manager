@@ -1,13 +1,17 @@
 from datetime import datetime
 from uuid import UUID
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core import Base
-from app.users.model import User
-from app.projects.model import Project
-from app.lvls.model import Lvl
+
+if TYPE_CHECKING:
+    from app.invitations.model import Invitation
+    from app.users.model import User
+    from app.projects.model import Project
+    from app.lvls.model import Lvl
 
 
 class Team(Base):
@@ -69,6 +73,28 @@ class Team(Base):
         passive_deletes=True,
     )
 
+    invitations: Mapped[list["Invitation"]] = relationship(
+        "Invitation",
+        back_populates="team",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    @property
+    def members_count(self) -> int:
+
+        return len({member.user_uuid for member in self.members})
+
+    @property
+    def lead_name(self) -> str | None:
+
+        return self.lead.fio if self.lead is not None else None
+
+    @property
+    def project_title(self) -> str:
+
+        return self.project.title
+
 
 class TeamMember(Base):
     
@@ -127,3 +153,12 @@ class TeamMember(Base):
         back_populates="team_members",
         foreign_keys=[lvl_uuid],
     )
+
+    @property
+    def is_team_lead(self) -> bool:
+
+        return self.team.lead_uuid == self.user_uuid
+
+
+from app.lvls.model import Lvl
+from app.invitations.model import Invitation

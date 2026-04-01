@@ -17,6 +17,14 @@ from app.users.model import User
 
 class LvlService:
 
+    DEFAULT_LEVELS: tuple[tuple[str, int], ...] = (
+        ("1", 0),
+        ("2", 100),
+        ("3", 250),
+        ("4", 500),
+        ("5", 1000),
+    )
+
     @staticmethod
     async def get_entry_level(
         session: AsyncSession,
@@ -48,22 +56,30 @@ class LvlService:
     @staticmethod
     @handle_model_errors
     @handle_connection_errors
-    async def create_default_lvl(
+    async def create_default_lvls(
         session: AsyncSession,
     ) -> None:
 
-        existing_lvl = await LvlRepository.get_entry_level(session)
+        existing_lvls = await LvlRepository.get_all(session)
+        existing_values = {lvl.value for lvl in existing_lvls}
+        existing_required_xp = {lvl.required_xp for lvl in existing_lvls}
 
-        if existing_lvl:
-            return
+        created_any = False
 
-        await LvlRepository.create(
-            Lvl(
-                value="1",
-                required_xp=0,
-            ),
-            session,
-        )
+        for value, required_xp in LvlService.DEFAULT_LEVELS:
+            if value in existing_values or required_xp in existing_required_xp:
+                continue
+
+            session.add(
+                Lvl(
+                    value=value,
+                    required_xp=required_xp,
+                ),
+            )
+            created_any = True
+
+        if created_any:
+            await session.commit()
 
     @staticmethod
     @handle_model_errors

@@ -48,7 +48,6 @@ class ProjectRepository:
             .options(*PROJECT_LOAD_OPTIONS)
             .where(Project.uuid == project_uuid)
         )
-
         result = await session.execute(stmt)
 
         return result.scalar_one_or_none()
@@ -59,10 +58,7 @@ class ProjectRepository:
         session: AsyncSession,
     ) -> Sequence[Project]:
 
-        conditions = ProjectRepository._build_conditions(
-            filters.model_dump(exclude_none=True),
-        )
-
+        conditions = ProjectRepository._build_conditions(filters.model_dump(exclude_none=True))
         stmt = (
             select(Project)
             .options(*PROJECT_LOAD_OPTIONS)
@@ -74,7 +70,6 @@ class ProjectRepository:
             stmt = stmt.limit(filters.limit + 1)
 
         result = await session.execute(stmt)
-
         return result.scalars().unique().all()
 
     @staticmethod
@@ -84,9 +79,7 @@ class ProjectRepository:
         session: AsyncSession,
     ) -> Sequence[Project]:
 
-        conditions = ProjectRepository._build_conditions(
-            filters.model_dump(exclude_none=True),
-        )
+        conditions = ProjectRepository._build_conditions(filters.model_dump(exclude_none=True))
         member_alias = aliased(TeamMember)
 
         stmt = (
@@ -110,7 +103,6 @@ class ProjectRepository:
             stmt = stmt.limit(filters.limit + 1)
 
         result = await session.execute(stmt)
-
         return result.scalars().unique().all()
 
     @staticmethod
@@ -120,7 +112,6 @@ class ProjectRepository:
     ) -> Project:
 
         session.add(project_obj)
-
         await session.commit()
 
         return await ProjectRepository.get(project_obj.uuid, session)  # type: ignore[return-value]
@@ -139,7 +130,6 @@ class ProjectRepository:
                 setattr(project_obj, field, value)
 
         await session.commit()
-
         return await ProjectRepository.get(project_obj.uuid, session)  # type: ignore[return-value]
 
     @staticmethod
@@ -149,5 +139,13 @@ class ProjectRepository:
     ) -> Project:
 
         await session.commit()
-
         return await ProjectRepository.get(project_obj.uuid, session)  # type: ignore[return-value]
+
+    @staticmethod
+    async def delete(
+        project_obj: Project,
+        session: AsyncSession,
+    ) -> None:
+
+        await session.delete(project_obj)
+        await session.commit()

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from typing import Any
 
 
@@ -32,4 +33,21 @@ class BaseCacheAdapter(ABC):
         self,
         key: str,
     ) -> bool:
+        ...
+
+    @abstractmethod
+    async def publish(
+        self,
+        channel: str,
+        value: Any,
+    ) -> int:
+        ...
+
+    @abstractmethod
+    def subscribe(
+        self,
+        channel: str,
+        *,
+        timeout: float = 15.0,
+    ) -> AsyncIterator[str | None]:
         ...

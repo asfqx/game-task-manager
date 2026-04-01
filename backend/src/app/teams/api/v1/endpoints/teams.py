@@ -138,3 +138,23 @@ async def remove_team_member(
     )
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{team_uuid}/leave",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Покинуть команду",
+)
+async def leave_team(
+    team_uuid: UUID,
+    user: AuthenticatedActiveUser,
+    session: DBSession,
+) -> Response:
+
+    await TeamService.leave_team(
+        team_uuid=team_uuid,
+        current_user=user,
+        session=session,
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

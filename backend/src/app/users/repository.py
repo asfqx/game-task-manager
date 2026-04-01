@@ -107,6 +107,30 @@ class UserRepository:
         return result.scalars().all()
 
     @staticmethod
+    async def get_directory(
+        query: str | None,
+        limit: int,
+        session: AsyncSession,
+    ) -> Sequence[User]:
+
+        stmt = select(User).where(User.status == UserStatus.ACTIVE)
+
+        if query:
+            stmt = stmt.where(
+                or_(
+                    User.username.ilike(f"%{query}%"),
+                    User.email.ilike(f"%{query.lower()}%"),
+                    User.fio.ilike(f"%{query}%"),
+                )
+            )
+
+        stmt = stmt.order_by(User.fio, User.username).limit(limit)
+
+        result = await session.execute(stmt)
+
+        return result.scalars().all()
+
+    @staticmethod
     async def get_without_email(session: AsyncSession) -> Sequence[User]:
 
         stmt = (

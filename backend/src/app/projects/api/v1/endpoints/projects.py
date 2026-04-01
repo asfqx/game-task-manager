@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Any, Sequence
 
 from fastapi import APIRouter, status
 
@@ -27,14 +28,12 @@ async def get_projects(
     user: AuthenticatedActiveUser,
     filters: ProjectFilterDepends,
     session: DBSession,
-) -> list[ProjectResponse]:
+) -> Sequence[dict[str, Any]]:
 
-    return list(
-        await ProjectService.get_projects(
-            current_user=user,
-            filters=filters,
-            session=session,
-        )
+    return await ProjectService.get_projects(
+        current_user=user,
+        filters=filters,
+        session=session,
     )
 
 
@@ -48,7 +47,7 @@ async def create_project(
     data: CreateProjectRequest,
     user: AuthenticatedActiveUser,
     session: DBSession,
-) -> ProjectDetailResponse:
+) -> dict[str, Any]:
 
     return await ProjectService.create_project(
         data=data,
@@ -67,7 +66,7 @@ async def get_project_by_uuid(
     project_uuid: UUID,
     user: AuthenticatedActiveUser,
     session: DBSession,
-) -> ProjectDetailResponse:
+) -> dict[str, Any]:
 
     return await ProjectService.get_project_by_id(
         project_uuid=project_uuid,
@@ -92,6 +91,42 @@ async def update_project(
     return await ProjectService.update_project(
         project_uuid=project_uuid,
         data=data,
+        current_user=user,
+        session=session,
+    )
+
+
+@router.delete(
+    "/{project_uuid}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Вы удалили проект",
+)
+async def delete_project(
+    project_uuid: UUID,
+    user: AuthenticatedActiveUser,
+    session: DBSession,
+) -> None:
+
+    await ProjectService.delete_project(
+        project_uuid=project_uuid,
+        current_user=user,
+        session=session,
+    )
+
+
+@router.post(
+    "/{project_uuid}/leave",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Вы покинули проект",
+)
+async def leave_project(
+    project_uuid: UUID,
+    user: AuthenticatedActiveUser,
+    session: DBSession,
+) -> None:
+
+    await ProjectService.leave_project(
+        project_uuid=project_uuid,
         current_user=user,
         session=session,
     )

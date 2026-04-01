@@ -52,16 +52,44 @@ class TaskRepositoryUpdatePayload(BaseModel):
 class TaskService:
 
     @staticmethod
-    def _serialize_task(task: Task) -> TaskResponse:
+    def _can_manage_task(task: Task, current_user: User) -> bool:
 
-        assignee_membership = next(
-            (
-                member
-                for member in task.team.members
-                if member.user_uuid == task.assignee_user_uuid
-            ),
-            None,
+        return (
+            current_user.role == UserRole.ADMIN
+            or task.team.project.creator_uuid == current_user.uuid
+            or task.team.lead_uuid == current_user.uuid
         )
+
+    @staticmethod
+    def _to_user_short_response(user: User | None) -> UserShortResponse | None:
+
+        if user is None:
+            return None
+
+        return UserShortResponse(
+            uuid=user.uuid,
+            username=user.username,
+            fio=user.fio,
+        )
+
+    @staticmethod
+    def _to_task_response(task: Task) -> TaskResponse:
+
+        assignee_team_progress = None
+        if task.assignee_team_progress is not None:
+            assignee_team_progress = TaskAssigneeProgressResponse(
+                xp_amount=task.assignee_team_progress.xp_amount,
+                lvl_uuid=task.assignee_team_progress.lvl_uuid,
+                lvl=(
+                    LvlSummaryResponse(
+                        uuid=task.assignee_team_progress.lvl.uuid,
+                        value=task.assignee_team_progress.lvl.value,
+                        required_xp=task.assignee_team_progress.lvl.required_xp,
+                    )
+                    if task.assignee_team_progress.lvl is not None
+                    else None
+                ),
+            )
 
         return TaskResponse(
             uuid=task.uuid,
@@ -69,29 +97,13 @@ class TaskService:
             team=TaskTeamResponse(
                 uuid=task.team.uuid,
                 name=task.team.name,
-                project_uuid=task.team.project.uuid,
+                project_uuid=task.team.project_uuid,
                 project_title=task.team.project.title,
             ),
             issuer_user_uuid=task.issuer_user_uuid,
-            issuer_user=(
-                UserShortResponse(
-                    uuid=task.issuer_user.uuid,
-                    username=task.issuer_user.username,
-                    fio=task.issuer_user.fio,
-                )
-                if task.issuer_user is not None
-                else None
-            ),
+            issuer_user=TaskService._to_user_short_response(task.issuer_user),
             assignee_user_uuid=task.assignee_user_uuid,
-            assignee_user=(
-                UserShortResponse(
-                    uuid=task.assignee_user.uuid,
-                    username=task.assignee_user.username,
-                    fio=task.assignee_user.fio,
-                )
-                if task.assignee_user is not None
-                else None
-            ),
+            assignee_user=TaskService._to_user_short_response(task.assignee_user),
             title=task.title,
             description=task.description,
             review_comment=task.review_comment,
@@ -103,24 +115,13 @@ class TaskService:
             completed_at=task.completed_at,
             created_at=task.created_at,
             updated_at=task.updated_at,
-            assignee_team_progress=(
-                TaskAssigneeProgressResponse(
-                    xp_amount=assignee_membership.xp_amount,
-                    lvl_uuid=assignee_membership.lvl_uuid,
-                    lvl=(
-                        LvlSummaryResponse(
-                            uuid=assignee_membership.lvl.uuid,
-                            value=assignee_membership.lvl.value,
-                            required_xp=assignee_membership.lvl.required_xp,
-                        )
-                        if assignee_membership is not None and assignee_membership.lvl is not None
-                        else None
-                    ),
-                )
-                if assignee_membership is not None
-                else None
-            ),
+            assignee_team_progress=assignee_team_progress,
         )
+
+    @classmethod
+    def to_task_responses(cls, tasks: Sequence[Task]) -> list[TaskResponse]:
+
+        return [cls._to_task_response(task) for task in tasks]
 
     @staticmethod
     async def _get_team_or_404(
@@ -280,7 +281,7 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         team = await cls._get_team_or_404(data.team_uuid, session)
 
@@ -340,7 +341,7 @@ class TaskService:
             content=f'Вам назначена новая задача "{data.title}" в команде "{team.name}"',
         )
 
-        return cls._serialize_task(created_task)
+        return created_task
 
     @classmethod
     @handle_model_errors
@@ -350,7 +351,7 @@ class TaskService:
         current_user: User,
         filters: TaskFilterQueryParams,
         session: AsyncSession,
-    ) -> Sequence[TaskResponse]:
+    ) -> Sequence[Task]:
 
         if current_user.role == UserRole.ADMIN:
             tasks = await TaskRepository.get_all(filters, session)
@@ -361,7 +362,7 @@ class TaskService:
                 session,
             )
 
-        return [cls._serialize_task(task) for task in tasks]
+        return tasks
 
     @classmethod
     @handle_model_errors
@@ -371,7 +372,7 @@ class TaskService:
         task_uuid: UUID,
         current_user: User,
         session: AsyncSession,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
@@ -386,7 +387,7 @@ class TaskService:
                 detail="Недостаточно прав для просмотра задачи",
             )
 
-        return cls._serialize_task(task)
+        return task
 
     @classmethod
     @handle_model_errors
@@ -402,11 +403,7 @@ class TaskService:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
-        if (
-            current_user.role != UserRole.ADMIN
-            and task.team.project.creator_uuid != current_user.uuid
-            and task.team.lead_uuid != current_user.uuid
-        ):
+        if not cls._can_manage_task(task, current_user):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для управления задачей",
@@ -465,7 +462,7 @@ class TaskService:
             notify_new_assignee = True
 
         if not changed_fields:
-            return cls._serialize_task(task)
+            return task
 
         await cls._log_task_action(
             session,
@@ -492,7 +489,7 @@ class TaskService:
                 ),
             )
 
-        return cls._serialize_task(updated_task)
+        return updated_task
 
     @classmethod
     @handle_model_errors
@@ -502,7 +499,7 @@ class TaskService:
         task_uuid: UUID,
         current_user: User,
         session: AsyncSession,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
@@ -535,7 +532,7 @@ class TaskService:
             session,
         )
 
-        return cls._serialize_task(updated_task)
+        return updated_task
 
     @classmethod
     @handle_model_errors
@@ -546,14 +543,16 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
-        if task.assignee_user_uuid != current_user.uuid:
+        is_manager = cls._can_manage_task(task, current_user)
+
+        if task.assignee_user_uuid != current_user.uuid and not is_manager:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                detail="Отправить задачу на проверку может только исполнитель",
+                detail="Отправить задачу на проверку может исполнитель или тимлид",
             )
 
         if task.status != TaskStatus.IN_WORK:
@@ -578,28 +577,36 @@ class TaskService:
             session,
         )
 
-        recipient_user_uuids: list[UUID] = []
-        if updated_task.team.lead_uuid is not None:
-            recipient_user_uuids.append(updated_task.team.lead_uuid)
-        if updated_task.team.project.creator_uuid not in recipient_user_uuids:
-            recipient_user_uuids.append(updated_task.team.project.creator_uuid)
+        if is_manager and updated_task.assignee_user_uuid is not None:
+            NotificationService.schedule(
+                background_tasks,
+                recipient_user_uuids=[updated_task.assignee_user_uuid],
+                sender_user_uuid=current_user.uuid,
+                content=f'Задача "{updated_task.title}" переведена тимлидом на проверку',
+            )
+        else:
+            recipient_user_uuids: list[UUID] = []
+            if updated_task.team.lead_uuid is not None:
+                recipient_user_uuids.append(updated_task.team.lead_uuid)
+            if updated_task.team.project.creator_uuid not in recipient_user_uuids:
+                recipient_user_uuids.append(updated_task.team.project.creator_uuid)
 
-        assignee_name = (
-            updated_task.assignee_user.fio
-            if updated_task.assignee_user is not None
-            else "исполнителем"
-        )
-        NotificationService.schedule(
-            background_tasks,
-            recipient_user_uuids=recipient_user_uuids,
-            sender_user_uuid=current_user.uuid,
-            content=(
-                f'Задача "{updated_task.title}" отправлена на проверку '
-                f"пользователем {assignee_name}"
-            ),
-        )
+            assignee_name = (
+                updated_task.assignee_user.fio
+                if updated_task.assignee_user is not None
+                else "исполнителем"
+            )
+            NotificationService.schedule(
+                background_tasks,
+                recipient_user_uuids=recipient_user_uuids,
+                sender_user_uuid=current_user.uuid,
+                content=(
+                    f'Задача "{updated_task.title}" отправлена на проверку '
+                    f"пользователем {assignee_name}"
+                ),
+            )
 
-        return cls._serialize_task(updated_task)
+        return updated_task
 
     @classmethod
     @handle_model_errors
@@ -610,24 +617,20 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
-        if (
-            current_user.role != UserRole.ADMIN
-            and task.team.project.creator_uuid != current_user.uuid
-            and task.team.lead_uuid != current_user.uuid
-        ):
+        if not cls._can_manage_task(task, current_user):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 detail="Недостаточно прав для управления задачей",
             )
 
-        if task.status != TaskStatus.ON_CHECK:
+        if task.status not in (TaskStatus.IN_WORK, TaskStatus.ON_CHECK):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail="Подтвердить можно только задачу на проверке",
+                detail="Отметить выполненной можно только задачу в работе или на проверке",
             )
 
         await cls._log_task_action(
@@ -660,10 +663,10 @@ class TaskService:
                 background_tasks,
                 recipient_user_uuids=[approved_task.assignee_user_uuid],
                 sender_user_uuid=current_user.uuid,
-                content=f'Задача "{approved_task.title}" подтверждена и закрыта',
+                content=f'Задача "{approved_task.title}" отмечена выполненной',
             )
 
-        return cls._serialize_task(approved_task)
+        return approved_task
 
     @classmethod
     @handle_model_errors
@@ -675,7 +678,7 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
@@ -727,4 +730,4 @@ class TaskService:
                 ),
             )
 
-        return cls._serialize_task(rejected_task)
+        return rejected_task

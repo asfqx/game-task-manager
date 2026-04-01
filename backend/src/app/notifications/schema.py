@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from app.users.schema import UserShortResponse
 
 
@@ -14,3 +14,5 @@ class NotificationResponse(BaseModel):
     sender_user_uuid: UUID | None = None
     sender_user: UserShortResponse | None = None
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

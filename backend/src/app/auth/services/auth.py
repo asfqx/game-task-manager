@@ -6,7 +6,7 @@ from jose import JWTError
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.cache import BaseCacheAdapter, RedisAdapter
+from app.adapters.cache import BaseCacheAdapter, get_cache_adapter
 from app.auth.schemas.auth import CreateSuperuserRequest, TokenPairResponse
 from app.auth.schemas.refresh import GetUserRoleResponse
 from app.core import DBSession, settings
@@ -23,7 +23,7 @@ from .email_confirm import EmailConfirmService
 
 class AuthService:
 
-    cache: BaseCacheAdapter = RedisAdapter(settings.cache_url)
+    cache: BaseCacheAdapter = get_cache_adapter()
 
     @staticmethod
     @handle_connection_errors

@@ -27,6 +27,7 @@ type SessionState = {
 
 const ACCESS_TOKEN_KEY = 'task-manager.access-token';
 const ROLE_KEY = 'task-manager.user-role';
+const DASHBOARD_PATH = '/dashboard';
 
 const heroHighlights = [
   {
@@ -213,25 +214,38 @@ function App() {
 
   useEffect(() => {
     const searchParams = readSearchParams();
-    const flow =
-      showPasswordReset && passwordResetStep === 'confirm'
-        ? 'reset-password'
-        : mode === 'register' && registerStep === 'confirm'
-          ? 'confirm-email'
-          : mode;
+    let hasChanges = false;
 
-    searchParams.set('mode', flow);
-    window.history.replaceState(
-      null,
-      '',
-      `${window.location.pathname}?${searchParams.toString()}`,
-    );
+    for (const key of ['mode', 'flow', 'tab']) {
+      if (searchParams.has(key)) {
+        searchParams.delete(key);
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) {
+      return;
+    }
+
+    const nextSearch = searchParams.toString();
+    window.history.replaceState(null, '', nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname);
   }, [mode, passwordResetStep, registerStep, showPasswordReset]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    if (!window.location.pathname.startsWith(DASHBOARD_PATH)) {
+      window.history.replaceState(null, '', DASHBOARD_PATH);
+    }
+  }, [session]);
 
   function clearLocalSession() {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(ROLE_KEY);
     setSession(null);
+    window.history.replaceState(null, '', '/');
   }
 
   function switchMode(nextMode: AuthMode) {
@@ -274,6 +288,7 @@ function App() {
         accessToken: tokenPair.access_token,
         role: roleResponse.role,
       });
+      window.history.replaceState(null, '', DASHBOARD_PATH);
     } catch (error) {
       setNotice({
         kind: 'error',

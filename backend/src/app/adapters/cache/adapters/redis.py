@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import redis.asyncio as redis
@@ -33,7 +34,7 @@ class RedisAdapter(BaseCacheAdapter):
     ) -> RedisValue | None:
 
         if not self._client:
-            msg = "Ошибка выполнения операции с CacheAdapter"
+            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
             raise GetRuntimeError(msg)
 
         value = await self._client.get(key)
@@ -54,7 +55,7 @@ class RedisAdapter(BaseCacheAdapter):
     ) -> None:
 
         if not self._client:
-            msg = "Ошибка выполнения операции с CacheAdapter"
+            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
             raise GetRuntimeError(msg)
 
         if isinstance(value, str):
@@ -91,11 +92,55 @@ class RedisAdapter(BaseCacheAdapter):
 
         return int(await self._client.publish(channel, data))
 
+    def subscribe(
+        self,
+        channel: str,
+        *,
+        timeout: float = 15.0,
+    ) -> AsyncIterator[str | None]:
+
+        async def iterator() -> AsyncIterator[str | None]:
+            if not self._client:
+                msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+                raise GetRuntimeError(msg)
+
+            pubsub = self._client.pubsub()
+            await pubsub.subscribe(channel)
+
+            try:
+                while True:
+                    message = await pubsub.get_message(
+                        ignore_subscribe_messages=True,
+                        timeout=timeout,
+                    )
+
+                    if message is None:
+                        yield None
+                        continue
+
+                    data = message["data"]
+                    if isinstance(data, bytes):
+                        yield data.decode("utf-8")
+                    elif isinstance(data, memoryview):
+                        yield data.tobytes().decode("utf-8")
+                    elif isinstance(data, str):
+                        yield data
+                    else:
+                        yield json.dumps(
+                            data,
+                            ensure_ascii=False,
+                            default=str,
+                        )
+            finally:
+                await pubsub.unsubscribe(channel)
+                await pubsub.aclose()
+
+        return iterator()
 
     async def delete(self, key: str) -> None:
 
         if not self._client:
-            msg = "Ошибка выполнения операции с CacheAdapter"
+            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
             raise GetRuntimeError(msg)
 
         await self._client.delete(key)
@@ -103,7 +148,7 @@ class RedisAdapter(BaseCacheAdapter):
     async def exists(self, key: str) -> bool:
 
         if not self._client:
-            msg = "Ошибка выполнения операции с CacheAdapter"
+            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
             raise GetRuntimeError(msg)
 
         return bool(await self.client.exists(key))

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import datetime as dt
 import json
 from collections.abc import AsyncIterator, Sequence
@@ -9,8 +7,8 @@ from fastapi import BackgroundTasks, HTTPException, Request, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.cache import RedisAdapter
-from app.core import AsyncSessionLocal, settings
+from app.adapters.cache import get_cache_adapter
+from app.core import AsyncSessionLocal
 from app.error_handler import handle_connection_errors, handle_model_errors
 from app.notifications.filter import NotificationFilterQueryParams
 from app.notifications.model import Notification
@@ -23,35 +21,6 @@ from app.users.schema import UserShortResponse
 class NotificationService:
 
     CHANNEL_PREFIX = "notifications"
-
-    @staticmethod
-    def serialize_notification(notification: Notification) -> NotificationResponse:
-
-        return NotificationResponse(
-            uuid=notification.uuid,
-            content=notification.content,
-            recipient_user_uuid=notification.recipient_user_uuid,
-            recipient_user=(
-                UserShortResponse(
-                    uuid=notification.recipient_user.uuid,
-                    username=notification.recipient_user.username,
-                    fio=notification.recipient_user.fio,
-                )
-                if notification.recipient_user is not None
-                else None
-            ),
-            sender_user_uuid=notification.sender_user_uuid,
-            sender_user=(
-                UserShortResponse(
-                    uuid=notification.sender_user.uuid,
-                    username=notification.sender_user.username,
-                    fio=notification.sender_user.fio,
-                )
-                if notification.sender_user is not None
-                else None
-            ),
-            created_at=notification.created_at,
-        )
 
     @classmethod
     def schedule(
@@ -114,28 +83,46 @@ class NotificationService:
 
                 await session.commit()
 
-                redis_adapter = RedisAdapter(settings.cache_url)
-                try:
-                    for notification_uuid in notification_uuids:
-                        notification = await NotificationRepository.get(
-                            notification_uuid,
-                            session,
-                        )
+                cache_adapter = get_cache_adapter()
 
-                        if notification is None or notification.recipient_user_uuid is None:
-                            continue
+                for notification_uuid in notification_uuids:
+                    notification = await NotificationRepository.get(
+                        notification_uuid,
+                        session,
+                    )
 
-                        await redis_adapter.publish(
-                            f"{cls.CHANNEL_PREFIX}:{notification.recipient_user_uuid}",
-                            {
-                                "event": "notification",
-                                "notification": cls.serialize_notification(
-                                    notification,
-                                ).model_dump(mode="json"),
-                            },
-                        )
-                finally:
-                    await redis_adapter.client.aclose()
+                    if notification is None or notification.recipient_user_uuid is None:
+                        continue
+                    
+                    notification_ser = NotificationResponse(
+                        uuid=notification.uuid,
+                        content=notification.content,
+                        recipient_user_uuid=notification.recipient_user_uuid,
+                        recipient_user=(
+                            UserShortResponse(
+                                uuid=notification.recipient_user.uuid,
+                                username=notification.recipient_user.username,
+                                fio=notification.recipient_user.fio,
+                            ) if notification.recipient_user else None
+                        ),
+                        sender_user_uuid=notification.sender_user_uuid,
+                        sender_user=(
+                            UserShortResponse(
+                                uuid=notification.sender_user.uuid,
+                                username=notification.sender_user.username,
+                                fio=notification.sender_user.fio,
+                            ) if notification.sender_user else None
+                        ),
+                        created_at=notification.created_at,
+                    )
+
+                    await cache_adapter.publish(
+                        f"{cls.CHANNEL_PREFIX}:{notification.recipient_user_uuid}",
+                        {
+                            "event": "notification",
+                            "notification": notification_ser.model_dump(mode="json"),
+                        },
+                    )
             except Exception:
                 await session.rollback()
                 logger.exception(
@@ -150,53 +137,26 @@ class NotificationService:
         request: Request,
     ) -> AsyncIterator[str]:
 
-        redis_adapter = RedisAdapter(settings.cache_url)
-        pubsub = redis_adapter.client.pubsub()
+        cache_adapter = get_cache_adapter()
         channel = f"{cls.CHANNEL_PREFIX}:{current_user.uuid}"
 
-        await pubsub.subscribe(channel)
+        yield (
+            "event: connected\n"
+            f"data: {json.dumps({'event': 'connected', 'user_uuid': str(current_user.uuid)}, ensure_ascii=False)}\n\n"
+        )
 
-        try:
-            yield (
-                "event: connected\n"
-                f"data: {json.dumps({'event': 'connected', 'user_uuid': str(current_user.uuid)}, ensure_ascii=False)}\n\n"
-            )
+        async for message in cache_adapter.subscribe(channel):
+            if await request.is_disconnected():
+                break
 
-            while True:
-                if await request.is_disconnected():
-                    break
-
-                message = await pubsub.get_message(
-                    ignore_subscribe_messages=True,
-                    timeout=15.0,
+            if message is None:
+                yield (
+                    "event: ping\n"
+                    f"data: {json.dumps({'timestamp': dt.datetime.now(dt.UTC).isoformat()}, ensure_ascii=False)}\n\n"
                 )
+                continue
 
-                if message is None:
-                    yield (
-                        "event: ping\n"
-                        f"data: {json.dumps({'timestamp': dt.datetime.now(dt.UTC).isoformat()}, ensure_ascii=False)}\n\n"
-                    )
-                    continue
-
-                data = message["data"]
-                if isinstance(data, bytes):
-                    payload = data.decode("utf-8")
-                elif isinstance(data, memoryview):
-                    payload = data.tobytes().decode("utf-8")
-                elif isinstance(data, str):
-                    payload = data
-                else:
-                    payload = json.dumps(
-                        data,
-                        ensure_ascii=False,
-                        default=str,
-                    )
-
-                yield f"event: notification\ndata: {payload}\n\n"
-        finally:
-            await pubsub.unsubscribe(channel)
-            await pubsub.aclose()
-            await redis_adapter.client.aclose()
+            yield f"event: notification\ndata: {message}\n\n"
 
     @classmethod
     @handle_model_errors
@@ -213,8 +173,29 @@ class NotificationService:
             filters,
             session,
         )
-
-        return [cls.serialize_notification(notification) for notification in notifications]
+        return [
+            NotificationResponse(
+                uuid=notification.uuid,
+                content=notification.content,
+                recipient_user_uuid=notification.recipient_user_uuid,
+                recipient_user=(
+                    UserShortResponse(
+                        uuid=notification.recipient_user.uuid,
+                        username=notification.recipient_user.username,
+                        fio=notification.recipient_user.fio,
+                    ) if notification.recipient_user else None
+                ),
+                sender_user_uuid=notification.sender_user_uuid,
+                sender_user=(
+                    UserShortResponse(
+                        uuid=notification.sender_user.uuid,
+                        username=notification.sender_user.username,
+                        fio=notification.sender_user.fio,
+                    ) if notification.sender_user else None
+                ),
+                created_at=notification.created_at,
+            ) for notification in notifications
+        ]
 
     @classmethod
     @handle_model_errors
@@ -240,4 +221,24 @@ class NotificationService:
                 detail="Недостаточно прав для просмотра уведомления",
             )
 
-        return cls.serialize_notification(notification)
+        return NotificationResponse(
+            uuid=notification.uuid,
+            content=notification.content,
+            recipient_user_uuid=notification.recipient_user_uuid,
+            recipient_user=(
+                UserShortResponse(
+                    uuid=notification.recipient_user.uuid,
+                    username=notification.recipient_user.username,
+                    fio=notification.recipient_user.fio,
+                ) if notification.recipient_user else None
+            ),
+            sender_user_uuid=notification.sender_user_uuid,
+            sender_user=(
+                UserShortResponse(
+                    uuid=notification.sender_user.uuid,
+                    username=notification.sender_user.username,
+                    fio=notification.sender_user.fio,
+                ) if notification.sender_user else None
+            ),
+            created_at=notification.created_at,
+        )

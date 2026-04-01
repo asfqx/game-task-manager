@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.enum import TaskStatus
 from app.lvls.schema import LvlSummaryResponse
@@ -39,12 +39,16 @@ class TaskTeamResponse(BaseModel):
     project_uuid: UUID
     project_title: str
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class TaskAssigneeProgressResponse(BaseModel):
 
     xp_amount: int
     lvl_uuid: UUID | None = None
     lvl: LvlSummaryResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskResponse(BaseModel):
@@ -68,3 +72,5 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     assignee_team_progress: TaskAssigneeProgressResponse | None = None
+
+    model_config = ConfigDict(from_attributes=True)

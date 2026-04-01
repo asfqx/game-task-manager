@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.enum import TaskStatus
 from app.projects.model import Project
 from app.tasks.filter import TaskFilterQueryParams
 from app.tasks.model import Task
@@ -108,6 +109,25 @@ class TaskRepository:
         if filters.limit:
             stmt = stmt.limit(filters.limit + 1)
 
+        result = await session.execute(stmt)
+
+        return result.scalars().unique().all()
+
+    @staticmethod
+    async def get_completed_by_assignee(
+        user_uuid: UUID,
+        session: AsyncSession,
+    ) -> Sequence[Task]:
+
+        stmt = (
+            select(Task)
+            .options(*TASK_LOAD_OPTIONS)
+            .where(
+                Task.assignee_user_uuid == user_uuid,
+                Task.status == TaskStatus.DONE,
+            )
+            .order_by(Task.completed_at.desc().nullslast(), Task.updated_at.desc())
+        )
         result = await session.execute(stmt)
 
         return result.scalars().unique().all()
