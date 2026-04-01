@@ -20,7 +20,7 @@ NOTIFICATION_LOAD_OPTIONS = (
 class NotificationRepository:
 
     @staticmethod
-    def _build_conditions(filters: NotificationFilterQueryParams) -> list[Any]:
+    def _build_conditions(filters: dict[str, Any]) -> list[Any]:
 
         filter_mapping: dict[str, Callable[[Any], Any]] = {
             "sender_user_uuid": lambda value: Notification.sender_user_uuid == value,

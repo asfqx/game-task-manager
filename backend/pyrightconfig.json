@@ -1,0 +1,34 @@
+
+{
+    "venvPath": "src",
+    "venv": ".venv",
+    "typeCheckingMode": "standard",
+    "ignore": [
+        "src/.venv",
+        "src/venv",
+        "src/alembic",
+        "src/docs",
+        "src/examples"
+    ],
+    "reportMissingImports": true,
+    "reportMissingTypeStubs": false,
+    "reportUnknownMemberType": false,
+    "reportOptionalSubscript": "warning",
+    "reportOptionalMemberAccess": "warning",
+    "reportOptionalCall": "warning",
+    "reportOptionalIterable": "warning",
+    "reportPrivateUsage": "none",
+    "reportImplicitStringConcatenation": "none",
+    "useLibraryCodeForTypes": true,
+    "executionEnvironments": [
+        {
+            "root": "src",
+            "pythonVersion": "3.13",
+            "pythonPlatform": "Darwin",
+            "extraPaths": [
+                "src",
+                "app"
+            ]
+        }
+    ]
+}

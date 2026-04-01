@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.system_logging.type import UserActionLogDetailsPayload
 from app.users.schema import UserShortResponse
@@ -16,6 +16,8 @@ class XpAccrualLogTaskResponse(BaseModel):
     project_uuid: UUID
     project_title: str
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class XpAccrualLogResponse(BaseModel):
 
@@ -29,6 +31,8 @@ class XpAccrualLogResponse(BaseModel):
     task_uuid: UUID | None = None
     task: XpAccrualLogTaskResponse | None = None
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class UserActionLogResponse(BaseModel):
 
@@ -40,3 +44,5 @@ class UserActionLogResponse(BaseModel):
     entity_type: str | None = None
     entity_uuid: UUID | None = None
     details: UserActionLogDetailsPayload | None = None
+
+    model_config = ConfigDict(from_attributes=True)

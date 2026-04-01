@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.lvls.schema import LvlSummaryResponse
 from app.users.schema import UserShortResponse
@@ -33,6 +33,8 @@ class TeamProjectResponse(BaseModel):
     uuid: UUID
     title: str
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class TeamMemberResponse(BaseModel):
 
@@ -46,6 +48,8 @@ class TeamMemberResponse(BaseModel):
     xp_amount: int
     joined_at: datetime
     is_team_lead: bool
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TeamResponse(BaseModel):
@@ -63,3 +67,5 @@ class TeamResponse(BaseModel):
     members: list[TeamMemberResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

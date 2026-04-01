@@ -1,7 +1,7 @@
 from typing import Sequence
 from uuid import UUID
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.core import DBSession, RateLimitErrorResponse
 from app.error_handler import error_schemas
@@ -12,6 +12,7 @@ from app.users.schema import (
     GetUserProfileResponse,
     UpdateUserProfileRequest,
     UpdateUserProfileResponse,
+    UserShortResponse,
 )
 from app.users.service import UserService
 
@@ -121,6 +122,27 @@ async def update_bio(
         new_bio=new_bio,
         current_user=user,
         session=session,
+    )
+
+
+@router.get(
+    "/directory",
+    status_code=status.HTTP_200_OK,
+    summary="Получить каталог пользователей",
+    response_model=list[UserShortResponse],
+)
+async def get_directory(
+    user: AuthenticatedActiveUser,
+    session: DBSession,
+    q: str | None = Query(default=None, min_length=1, max_length=255),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> Sequence[UserShortResponse]:
+
+    return await UserService.get_directory(
+        current_user=user,
+        session=session,
+        query=q,
+        limit=limit,
     )
 
 

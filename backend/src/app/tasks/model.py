@@ -86,3 +86,34 @@ class Task(Base):
         "User",
         foreign_keys=[assignee_user_uuid],
     )
+
+    @property
+    def assignee_team_progress(self):
+
+        return next(
+            (
+                member
+                for member in self.team.members
+                if member.user_uuid == self.assignee_user_uuid
+            ),
+            None,
+        )
+
+    @property
+    def team_name(self) -> str:
+
+        return self.team.name
+
+    @property
+    def project_uuid(self) -> UUID:
+
+        return self.team.project.uuid
+
+    @property
+    def project_title(self) -> str:
+
+        return self.team.project.title
+
+
+from app.teams.model import Team
+from app.users.model import User

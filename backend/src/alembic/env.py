@@ -11,6 +11,7 @@ from app.core import Base, settings
 from app.projects.model import Project
 from app.users.model import User
 from app.notifications.model import Notification
+from app.invitations.model import Invitation
 from app.teams.model import Team, TeamMember
 from app.lvls.model import Lvl
 from app.tasks.model import Task

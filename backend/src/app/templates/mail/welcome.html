@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <title>Добро пожаловать!</title>
+    <style>
+        body {
+            background-color: #2f3136;
+            color: #dcddde;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        h1 {
+            color: #fff;
+            font-weight: 700;
+            font-size: 28px;
+            margin-bottom: 20px;
+        }
+        p {
+            font-size: 16px;
+            line-height: 1.5;
+            margin: 12px 0;
+            color: #b9bbbe;
+        }
+        .signature {
+            margin-top: 40px;
+            color: #72767d;
+            font-style: italic;
+        }
+        .container {
+            max-width: 600px;
+            background-color: #36393f;
+            padding: 30px 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Здравствуйте, {{ username }}!</h1>
+        <p>Спасибо за регистрацию на нашем сервисе.</p>
+        <p>Мы рады видеть вас среди наших пользователей.</p>
+        <p>Если у вас возникнут вопросы, не стесняйтесь обращаться в поддержку.</p>
+        <p class="signature">С уважением,<br />Команда поддержки</p>
+    </div>
+</body>
+</html>

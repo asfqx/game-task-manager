@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CreateLvlRequest(BaseModel):
@@ -21,6 +21,8 @@ class LvlSummaryResponse(BaseModel):
     uuid: UUID
     value: str
     required_xp: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LvlResponse(LvlSummaryResponse):

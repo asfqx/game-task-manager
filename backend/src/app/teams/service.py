@@ -1,109 +1,24 @@
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enum import UserRole
 from app.error_handler import handle_connection_errors, handle_model_errors
-from app.lvls.schema import LvlSummaryResponse
 from app.lvls.service import LvlService
 from app.projects.repository import ProjectRepository
 from app.system_logging.service import SystemLoggingService
 from app.teams.filter import TeamFilterQueryParams
 from app.teams.model import Team, TeamMember
 from app.teams.repository import TeamRepository
-from app.teams.schema import (
-    AddTeamMemberRequest,
-    CreateTeamRequest,
-    TeamMemberResponse,
-    TeamProjectResponse,
-    TeamResponse,
-    UpdateTeamRequest,
-)
+from app.teams.schema import AddTeamMemberRequest, CreateTeamRequest, UpdateTeamRequest
 from app.users.model import User
 from app.users.repository import UserRepository
-from app.users.schema import UserShortResponse
 
 
 class TeamService:
-
-    @staticmethod
-    def _serialize_user(user: User | None) -> UserShortResponse | None:
-
-        if user is None:
-            return None
-
-        return UserShortResponse(
-            uuid=user.uuid,
-            username=user.username,
-            fio=user.fio,
-        )
-
-    @staticmethod
-    def _serialize_lvl(team_member: TeamMember) -> LvlSummaryResponse | None:
-
-        if team_member.lvl is None:
-            return None
-
-        return LvlSummaryResponse(
-            uuid=team_member.lvl.uuid,
-            value=team_member.lvl.value,
-            required_xp=team_member.lvl.required_xp,
-        )
-
-    @classmethod
-    def _serialize_member(
-        cls,
-        member: TeamMember,
-        team: Team,
-    ) -> TeamMemberResponse:
-
-        return TeamMemberResponse(
-            uuid=member.uuid,
-            user_uuid=member.user_uuid,
-            user=cls._serialize_user(member.user),
-            added_by_uuid=member.added_by_uuid,
-            added_by=cls._serialize_user(member.added_by),
-            lvl_uuid=member.lvl_uuid,
-            lvl=cls._serialize_lvl(member),
-            xp_amount=member.xp_amount,
-            joined_at=member.joined_at,
-            is_team_lead=member.user_uuid == team.lead_uuid,
-        )
-
-    @classmethod
-    def _serialize_team(
-        cls,
-        team: Team,
-    ) -> TeamResponse:
-
-        members = sorted(
-            team.members,
-            key=lambda member: (
-                member.user_uuid != team.lead_uuid,
-                member.user.fio.lower(),
-            ),
-        )
-
-        return TeamResponse(
-            uuid=team.uuid,
-            project_uuid=team.project_uuid,
-            project=TeamProjectResponse(
-                uuid=team.project.uuid,
-                title=team.project.title,
-            ),
-            name=team.name,
-            description=team.description,
-            lead_uuid=team.lead_uuid,
-            lead=cls._serialize_user(team.lead),
-            created_by_uuid=team.created_by_uuid,
-            created_by=cls._serialize_user(team.created_by),
-            members_count=len({member.user_uuid for member in team.members}),
-            members=[cls._serialize_member(member, team) for member in members],
-            created_at=team.created_at,
-            updated_at=team.updated_at,
-        )
 
     @staticmethod
     async def _get_team_or_404(
@@ -112,14 +27,33 @@ class TeamService:
     ) -> Team:
 
         team = await TeamRepository.get(team_uuid, session)
-
-        if not team:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Команда не найдена",
-            )
+        if team is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Команда не найдена")
 
         return team
+
+    @staticmethod
+    async def _is_user_in_project_teams(
+        project_uuid: UUID,
+        user_uuid: UUID,
+        session: AsyncSession,
+    ) -> bool:
+
+        membership_alias = TeamMember
+        stmt = (
+            select(Team.uuid)
+            .outerjoin(membership_alias, membership_alias.team_uuid == Team.uuid)
+            .where(
+                Team.project_uuid == project_uuid,
+                or_(
+                    Team.lead_uuid == user_uuid,
+                    membership_alias.user_uuid == user_uuid,
+                ),
+            )
+            .limit(1)
+        )
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none() is not None
 
     @classmethod
     @handle_model_errors
@@ -129,15 +63,11 @@ class TeamService:
         data: CreateTeamRequest,
         current_user: User,
         session: AsyncSession,
-    ) -> TeamResponse:
+    ) -> Team:
 
         project = await ProjectRepository.get(data.project_uuid, session)
-
-        if not project:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Проект не найден",
-            )
+        if project is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Проект не найден")
 
         if current_user.role != UserRole.ADMIN and project.creator_uuid != current_user.uuid:
             raise HTTPException(
@@ -146,10 +76,7 @@ class TeamService:
             )
 
         if data.lead_uuid and await UserRepository.get(data.lead_uuid, session) is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Пользователь не найден",
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
         member_uuids = list(dict.fromkeys(data.member_uuids))
         if data.lead_uuid and data.lead_uuid not in member_uuids:
@@ -157,13 +84,9 @@ class TeamService:
 
         for member_uuid in member_uuids:
             if await UserRepository.get(member_uuid, session) is None:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    detail="Пользователь не найден",
-                )
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
         entry_lvl = await LvlService.get_entry_level(session)
-
         team = Team(
             project_uuid=data.project_uuid,
             created_by_uuid=current_user.uuid,
@@ -179,6 +102,7 @@ class TeamService:
             lvl_uuid=entry_lvl.uuid if entry_lvl else None,
             session=session,
         )
+
         await SystemLoggingService.log_user_action(
             session,
             action="team_created",
@@ -200,7 +124,7 @@ class TeamService:
             )
         await session.commit()
 
-        return cls._serialize_team(created_team)
+        return created_team
 
     @classmethod
     @handle_model_errors
@@ -210,18 +134,12 @@ class TeamService:
         current_user: User,
         filters: TeamFilterQueryParams,
         session: AsyncSession,
-    ) -> Sequence[TeamResponse]:
+    ) -> Sequence[Team]:
 
         if current_user.role == UserRole.ADMIN:
-            teams = await TeamRepository.get_all(filters, session)
-        else:
-            teams = await TeamRepository.get_accessible_for_user(
-                current_user.uuid,
-                filters,
-                session,
-            )
+            return await TeamRepository.get_all(filters, session)
 
-        return [cls._serialize_team(team) for team in teams]
+        return await TeamRepository.get_accessible_for_user(current_user.uuid, filters, session)
 
     @classmethod
     @handle_model_errors
@@ -231,22 +149,9 @@ class TeamService:
         team_uuid: UUID,
         current_user: User,
         session: AsyncSession,
-    ) -> TeamResponse:
+    ) -> Team:
 
-        team = await cls._get_team_or_404(team_uuid, session)
-
-        if (
-            current_user.role != UserRole.ADMIN
-            and team.project.creator_uuid != current_user.uuid
-            and team.lead_uuid != current_user.uuid
-            and not any(member.user_uuid == current_user.uuid for member in team.members)
-        ):
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Недостаточно прав для просмотра команды",
-            )
-
-        return cls._serialize_team(team)
+        return await cls._get_team_or_404(team_uuid, session)
 
     @classmethod
     @handle_model_errors
@@ -257,28 +162,25 @@ class TeamService:
         data: UpdateTeamRequest,
         current_user: User,
         session: AsyncSession,
-    ) -> TeamResponse:
+    ) -> Team:
 
         team = await cls._get_team_or_404(team_uuid, session)
 
-        if current_user.role != UserRole.ADMIN and team.project.creator_uuid != current_user.uuid:
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                detail="Недостаточно прав для управления командой",
-            )
+        if (
+            current_user.role != UserRole.ADMIN
+            and team.project.creator_uuid != current_user.uuid
+            and team.lead_uuid != current_user.uuid
+        ):
+          raise HTTPException(
+              status.HTTP_403_FORBIDDEN,
+              detail="Недостаточно прав для управления командой",
+          )
 
         if data.lead_uuid and await UserRepository.get(data.lead_uuid, session) is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Пользователь не найден",
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
         if data.lead_uuid:
-            existing_membership = await TeamRepository.get_membership(
-                team.uuid,
-                data.lead_uuid,
-                session,
-            )
+            existing_membership = await TeamRepository.get_membership(team.uuid, data.lead_uuid, session)
             if existing_membership is None:
                 entry_lvl = await LvlService.get_entry_level(session)
                 session.add(
@@ -308,9 +210,7 @@ class TeamService:
             details={"changed_fields": sorted(data.model_fields_set)},
             commit=False,
         )
-        updated_team = await TeamRepository.update(team, data, session)
-
-        return cls._serialize_team(updated_team)
+        return await TeamRepository.update(team, data, session)
 
     @classmethod
     @handle_model_errors
@@ -321,7 +221,7 @@ class TeamService:
         data: AddTeamMemberRequest,
         current_user: User,
         session: AsyncSession,
-    ) -> TeamResponse:
+    ) -> Team:
 
         team = await cls._get_team_or_404(team_uuid, session)
 
@@ -335,52 +235,53 @@ class TeamService:
                 detail="Недостаточно прав для управления участниками команды",
             )
 
-        if await UserRepository.get(data.user_uuid, session) is None:
+        user = await UserRepository.get(data.user_uuid, session)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+
+        existing_membership = await TeamRepository.get_membership(team.uuid, data.user_uuid, session)
+        if existing_membership is not None or team.lead_uuid == data.user_uuid:
+            refreshed_team = await TeamRepository.get(team.uuid, session)
+            return refreshed_team  # type: ignore[return-value]
+
+        if not await cls._is_user_in_project_teams(team.project_uuid, data.user_uuid, session):
             raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Пользователь не найден",
+                status.HTTP_400_BAD_REQUEST,
+                detail="Пользователь должен уже состоять в одной из команд проекта",
             )
 
-        existing_membership = await TeamRepository.get_membership(
-            team.uuid,
-            data.user_uuid,
+        entry_lvl = await LvlService.get_entry_level(session)
+        await TeamRepository.create_membership(
+            TeamMember(
+                team_uuid=team.uuid,
+                user_uuid=data.user_uuid,
+                added_by_uuid=current_user.uuid,
+                lvl_uuid=entry_lvl.uuid if entry_lvl else None,
+            ),
             session,
         )
-
-        if existing_membership is None:
-            entry_lvl = await LvlService.get_entry_level(session)
-            await TeamRepository.create_membership(
-                TeamMember(
-                    team_uuid=team.uuid,
-                    user_uuid=data.user_uuid,
-                    added_by_uuid=current_user.uuid,
-                    lvl_uuid=entry_lvl.uuid if entry_lvl else None,
-                ),
-                session,
-            )
-            await SystemLoggingService.log_user_action(
-                session,
-                action="team_member_added",
-                actor_user_uuid=current_user.uuid,
-                entity_type="team",
-                entity_uuid=team.uuid,
-                details={"member_user_uuid": str(data.user_uuid)},
-                commit=False,
-            )
-            await SystemLoggingService.log_user_action(
-                session,
-                action="team_joined",
-                actor_user_uuid=data.user_uuid,
-                entity_type="team",
-                entity_uuid=team.uuid,
-                details={"added_by_user_uuid": str(current_user.uuid)},
-                commit=False,
-            )
-            await session.commit()
+        await SystemLoggingService.log_user_action(
+            session,
+            action="team_member_added",
+            actor_user_uuid=current_user.uuid,
+            entity_type="team",
+            entity_uuid=team.uuid,
+            details={"member_user_uuid": str(data.user_uuid)},
+            commit=False,
+        )
+        await SystemLoggingService.log_user_action(
+            session,
+            action="team_joined",
+            actor_user_uuid=data.user_uuid,
+            entity_type="team",
+            entity_uuid=team.uuid,
+            details={"added_by_user_uuid": str(current_user.uuid)},
+            commit=False,
+        )
+        await session.commit()
 
         refreshed_team = await TeamRepository.get(team.uuid, session)
-
-        return cls._serialize_team(refreshed_team)  # type: ignore[arg-type]
+        return refreshed_team  # type: ignore[return-value]
 
     @classmethod
     @handle_model_errors
@@ -412,12 +313,8 @@ class TeamService:
             )
 
         membership = await TeamRepository.get_membership(team.uuid, user_uuid, session)
-
         if membership is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail="Участник не состоит в этой команде",
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Участник не состоит в этой команде")
 
         await TeamRepository.delete_membership(membership, session)
         await SystemLoggingService.log_user_action(
@@ -436,6 +333,39 @@ class TeamService:
             entity_type="team",
             entity_uuid=team.uuid,
             details={"removed_by_user_uuid": str(current_user.uuid)},
+            commit=False,
+        )
+        await session.commit()
+
+    @classmethod
+    @handle_model_errors
+    @handle_connection_errors
+    async def leave_team(
+        cls,
+        team_uuid: UUID,
+        current_user: User,
+        session: AsyncSession,
+    ) -> None:
+
+        team = await cls._get_team_or_404(team_uuid, session)
+        membership = await TeamRepository.get_membership(team.uuid, current_user.uuid, session)
+
+        if membership is None and team.lead_uuid != current_user.uuid:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не состоит в этой команде")
+
+        if team.lead_uuid == current_user.uuid:
+            team.lead_uuid = None
+
+        if membership is not None:
+            await session.delete(membership)
+
+        await SystemLoggingService.log_user_action(
+            session,
+            action="team_left",
+            actor_user_uuid=current_user.uuid,
+            entity_type="team",
+            entity_uuid=team.uuid,
+            details={"project_uuid": str(team.project_uuid)},
             commit=False,
         )
         await session.commit()

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -41,3 +39,6 @@ class Notification(Base):
         "User",
         foreign_keys=[sender_user_uuid],
     )
+
+
+from app.users.model import User

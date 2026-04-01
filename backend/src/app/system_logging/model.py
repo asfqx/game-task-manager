@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
@@ -8,6 +9,10 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core import Base
 from app.system_logging.type import UserActionLogDetailsPayload
+
+if TYPE_CHECKING:
+    from app.tasks.model import Task
+    from app.users.model import User
 
 
 class XpAccrualLog(Base):
@@ -71,3 +76,7 @@ class UserActionLog(Base):
         "User",
         foreign_keys=[actor_user_uuid],
     )
+
+
+from app.tasks.model import Task
+from app.users.model import User

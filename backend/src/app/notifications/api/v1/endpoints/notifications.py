@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Sequence
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import StreamingResponse
@@ -47,13 +48,13 @@ async def get_notifications(
     user: AuthenticatedActiveUser,
     filters: NotificationFilterDepends,
     session: DBSession,
-) -> list[NotificationResponse]:
+) -> Sequence[NotificationResponse]:
 
     return await NotificationService.get_notifications(
-            current_user=user,
-            filters=filters,
-            session=session,
-        )
+        current_user=user,
+        filters=filters,
+        session=session,
+    )
 
 
 @router.get(
