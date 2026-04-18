@@ -399,7 +399,7 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
@@ -471,7 +471,7 @@ class TaskService:
             task_uuid=task.uuid,
             details={"changed_fields": changed_fields},
         )
-
+        
         updated_task = await TaskRepository.update(
             task,
             TaskRepositoryUpdatePayload(**update_data),
@@ -522,7 +522,7 @@ class TaskService:
             task_uuid=task.uuid,
         )
 
-        updated_task = await TaskRepository.update(
+        return await TaskRepository.update(
             task,
             TaskRepositoryUpdatePayload(
                 status=TaskStatus.IN_WORK,
@@ -531,8 +531,6 @@ class TaskService:
             ),
             session,
         )
-
-        return updated_task
 
     @classmethod
     @handle_model_errors

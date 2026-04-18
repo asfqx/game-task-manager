@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 
 import type { LvlResponse, UserProfileResponse, UserTeamSummaryResponse } from '../api/types';
 import { AvatarImage } from './AvatarImage';
@@ -73,6 +73,11 @@ export function UserProfileDrawer({
   const [passwordResetForm, setPasswordResetForm] = useState<PasswordResetFormState>(emptyPasswordResetForm);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
+  const onLoadLevelsRef = useRef(onLoadLevels);
+
+  useEffect(() => {
+    onLoadLevelsRef.current = onLoadLevels;
+  }, [onLoadLevels]);
 
   useEffect(() => {
     if (!profile) {
@@ -104,7 +109,7 @@ export function UserProfileDrawer({
   }, [profile]);
 
   useEffect(() => {
-    if (!profile?.teams.length || levels.length || isLevelsLoading) {
+    if (!profile?.teams.length || levels.length) {
       return;
     }
 
@@ -113,7 +118,7 @@ export function UserProfileDrawer({
     void (async () => {
       setIsLevelsLoading(true);
       try {
-        const nextLevels = await onLoadLevels();
+        const nextLevels = await onLoadLevelsRef.current();
         if (!cancelled) {
           setLevels(nextLevels);
         }
@@ -131,7 +136,7 @@ export function UserProfileDrawer({
     return () => {
       cancelled = true;
     };
-  }, [isLevelsLoading, levels.length, onLoadLevels, profile]);
+  }, [levels.length, profile?.teams.length, profile?.uuid]);
 
   const avatarUrl = profile ? resolveAvatarUrl(profile.avatar_url) : null;
   const sortedLevels = useMemo(
@@ -162,16 +167,17 @@ export function UserProfileDrawer({
 
     return profile.teams.map((team) => {
       const hasLevelScale = sortedLevels.length > 0;
-      const nextLevel = hasLevelScale && team.lvl
-        ? sortedLevels.find((level) => level.required_xp > team.lvl.required_xp) ?? null
+      const currentLevel = team.lvl;
+      const nextLevel = hasLevelScale && currentLevel
+        ? sortedLevels.find((level) => level.required_xp > currentLevel.required_xp) ?? null
         : null;
 
       const progressPercent = (() => {
         if (!hasLevelScale) {
-          return team.lvl ? 0 : Math.max(0, Math.min(100, team.xp_amount));
+          return currentLevel ? 0 : Math.max(0, Math.min(100, team.xp_amount));
         }
 
-        if (!team.lvl) {
+        if (!currentLevel) {
           return Math.max(0, Math.min(100, team.xp_amount));
         }
 
@@ -179,7 +185,7 @@ export function UserProfileDrawer({
           return 100;
         }
 
-        const baseXp = team.lvl.required_xp;
+        const baseXp = currentLevel.required_xp;
         const rangeXp = Math.max(nextLevel.required_xp - baseXp, 1);
         return Math.max(0, Math.min(100, ((team.xp_amount - baseXp) / rangeXp) * 100));
       })();
@@ -234,13 +240,13 @@ export function UserProfileDrawer({
   async function handleOpenLevels() {
     setIsLevelsOpen((current) => !current);
 
-    if (levels.length || isLevelsOpen) {
+    if (levels.length || isLevelsOpen || isLevelsLoading) {
       return;
     }
 
     setIsLevelsLoading(true);
     try {
-      setLevels(await onLoadLevels());
+      setLevels(await onLoadLevelsRef.current());
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : 'Не удалось загрузить уровни.');
     } finally {
@@ -432,7 +438,7 @@ export function UserProfileDrawer({
                     ))}
                   </div>
                 ) : (
-                  <div className="profile-drawer__empty">Пользователь пока не состоит в командах.</div>
+                  <div className="profile-drawer__empty">Пользователь пока  не выполнил задач.</div>
                 )}
 
                 {isLevelsOpen ? (
@@ -610,7 +616,7 @@ export function UserProfileDrawer({
                     ))}
                   </div>
                 ) : (
-                  <div className="profile-drawer__empty">Пользователь пока не состоит в командах.</div>
+                  <div className="profile-drawer__empty">Пользователь пока не состоит в команде</div>
                 )}
               </section>
 

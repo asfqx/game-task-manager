@@ -34,7 +34,7 @@ class RedisAdapter(BaseCacheAdapter):
     ) -> RedisValue | None:
 
         if not self._client:
-            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+            msg = "Ошбика при работе CacheAdapter"
             raise GetRuntimeError(msg)
 
         value = await self._client.get(key)
@@ -55,7 +55,7 @@ class RedisAdapter(BaseCacheAdapter):
     ) -> None:
 
         if not self._client:
-            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+            msg = "Ошбика при работе CacheAdapter"
             raise GetRuntimeError(msg)
 
         if isinstance(value, str):
@@ -74,7 +74,7 @@ class RedisAdapter(BaseCacheAdapter):
     ) -> int:
 
         if not self._client:
-            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+            msg = "Ошбика при работе CacheAdapter"
             raise GetRuntimeError(msg)
 
         if isinstance(value, bytes):
@@ -101,7 +101,7 @@ class RedisAdapter(BaseCacheAdapter):
 
         async def iterator() -> AsyncIterator[str | None]:
             if not self._client:
-                msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+                msg = "Ошбика при работе CacheAdapter"
                 raise GetRuntimeError(msg)
 
             pubsub = self._client.pubsub()
@@ -140,7 +140,7 @@ class RedisAdapter(BaseCacheAdapter):
     async def delete(self, key: str) -> None:
 
         if not self._client:
-            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+            msg = "Ошбика при работе CacheAdapter"
             raise GetRuntimeError(msg)
 
         await self._client.delete(key)
@@ -148,7 +148,7 @@ class RedisAdapter(BaseCacheAdapter):
     async def exists(self, key: str) -> bool:
 
         if not self._client:
-            msg = "РћС€РёР±РєР° РІС‹РїРѕР»РЅРµРЅРёСЏ РѕРїРµСЂР°С†РёРё СЃ CacheAdapter"
+            msg = "Ошбика при работе CacheAdapter"
             raise GetRuntimeError(msg)
 
         return bool(await self.client.exists(key))

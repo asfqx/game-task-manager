@@ -52,6 +52,7 @@ import { DateTimePicker } from '../features/dashboard/components/DateTimePicker'
 import { InvitationsPage } from '../features/dashboard/components/InvitationsPage';
 import { ModalShell } from '../features/dashboard/components/ModalShell';
 import { NotificationCenter } from '../features/dashboard/components/NotificationCenter';
+import { ProjectTaskReportPage } from '../features/dashboard/components/ProjectTaskReportPage';
 import { SidebarParticipantsSection } from '../features/dashboard/components/SidebarParticipantsSection';
 import { TaskBoard } from '../features/dashboard/components/TaskBoard';
 import { TaskDrawer } from '../features/dashboard/components/TaskDrawer';
@@ -76,6 +77,7 @@ type DashboardRoute = {
   page: 'projects' | 'invitations';
   projectId: string | null;
   teamId: string | null;
+  projectView: 'overview' | 'tasks-report';
 };
 
 function parseDashboardRoute(pathname: string): DashboardRoute {
@@ -86,6 +88,7 @@ function parseDashboardRoute(pathname: string): DashboardRoute {
       page: 'projects',
       projectId: null,
       teamId: null,
+      projectView: 'overview',
     };
   }
 
@@ -94,6 +97,7 @@ function parseDashboardRoute(pathname: string): DashboardRoute {
       page: 'invitations',
       projectId: null,
       teamId: null,
+      projectView: 'overview',
     };
   }
 
@@ -102,6 +106,16 @@ function parseDashboardRoute(pathname: string): DashboardRoute {
       page: 'projects',
       projectId: null,
       teamId: null,
+      projectView: 'overview',
+    };
+  }
+
+  if (segments[3] === 'tasks-report') {
+    return {
+      page: 'projects',
+      projectId: segments[2],
+      teamId: null,
+      projectView: 'tasks-report',
     };
   }
 
@@ -109,6 +123,7 @@ function parseDashboardRoute(pathname: string): DashboardRoute {
     page: 'projects',
     projectId: segments[2],
     teamId: segments[3] === 'teams' && segments[4] ? segments[4] : null,
+    projectView: 'overview',
   };
 }
 
@@ -121,11 +136,33 @@ function buildDashboardPath(route: DashboardRoute): string {
     return '/dashboard';
   }
 
+  if (route.projectView === 'tasks-report') {
+    return `/dashboard/projects/${route.projectId}/tasks-report`;
+  }
+
   if (!route.teamId) {
     return `/dashboard/projects/${route.projectId}`;
   }
 
   return `/dashboard/projects/${route.projectId}/teams/${route.teamId}`;
+}
+
+async function getProjectReportTasks(
+  accessToken: string,
+  project: ProjectDetailResponse,
+): Promise<TaskResponse[]> {
+  const taskGroups = await Promise.all(
+    project.teams.map((team) => getTasks(accessToken, team.uuid)),
+  );
+  const tasksByUuid = new Map<string, TaskResponse>();
+
+  for (const taskGroup of taskGroups) {
+    for (const task of taskGroup) {
+      tasksByUuid.set(task.uuid, task);
+    }
+  }
+
+  return Array.from(tasksByUuid.values());
 }
 
 function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
@@ -139,9 +176,12 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialRoute.projectId);
   const [selectedProject, setSelectedProject] = useState<ProjectDetailResponse | null>(null);
+  const [selectedProjectView, setSelectedProjectView] = useState<'overview' | 'tasks-report'>(initialRoute.projectView);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(initialRoute.teamId);
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null);
   const [tasks, setTasks] = useState<TaskResponse[]>([]);
+  const [projectReportTasks, setProjectReportTasks] = useState<TaskResponse[]>([]);
+  const [projectReportLoading, setProjectReportLoading] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [directoryQuery, setDirectoryQuery] = useState('');
   const [directoryUsers, setDirectoryUsers] = useState<UserShortResponse[]>([]);
@@ -174,7 +214,10 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
   const [notice, setNotice] = useState<Notice>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
-  const selectedTask = tasks.find((task) => task.uuid === selectedTaskId) ?? null;
+  const selectedTask =
+    tasks.find((task) => task.uuid === selectedTaskId) ??
+    projectReportTasks.find((task) => task.uuid === selectedTaskId) ??
+    null;
   const inviteableTeams = useMemo(() => {
     if (!profile) {
       return [];
@@ -285,28 +328,36 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
     setCurrentPage(route.page);
     setSelectedProjectId(route.projectId);
     setSelectedTeamId(route.teamId);
+    setSelectedProjectView(route.projectView);
   }
 
   function navigateToProjects() {
-    const nextRoute = { page: 'projects' as const, projectId: null, teamId: null };
+    const nextRoute = { page: 'projects' as const, projectId: null, teamId: null, projectView: 'overview' as const };
     window.history.pushState(null, '', buildDashboardPath(nextRoute));
     applyRoute(nextRoute);
   }
 
   function navigateToInvitations() {
-    const nextRoute = { page: 'invitations' as const, projectId: null, teamId: null };
+    const nextRoute = { page: 'invitations' as const, projectId: null, teamId: null, projectView: 'overview' as const };
     window.history.pushState(null, '', buildDashboardPath(nextRoute));
     applyRoute(nextRoute);
   }
 
   function navigateToProject(projectId: string) {
-    const nextRoute = { page: 'projects' as const, projectId, teamId: null };
+    const nextRoute = { page: 'projects' as const, projectId, teamId: null, projectView: 'overview' as const };
     window.history.pushState(null, '', buildDashboardPath(nextRoute));
     applyRoute(nextRoute);
   }
 
+  function navigateToProjectTaskReport(projectId: string) {
+    const nextRoute = { page: 'projects' as const, projectId, teamId: null, projectView: 'tasks-report' as const };
+    window.history.pushState(null, '', buildDashboardPath(nextRoute));
+    applyRoute(nextRoute);
+    setSelectedTaskId(null);
+  }
+
   function navigateToTeam(projectId: string, teamId: string) {
-    const nextRoute = { page: 'projects' as const, projectId, teamId };
+    const nextRoute = { page: 'projects' as const, projectId, teamId, projectView: 'overview' as const };
     window.history.pushState(null, '', buildDashboardPath(nextRoute));
     applyRoute(nextRoute);
   }
@@ -385,6 +436,8 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
     if (!selectedProjectId) {
       setSelectedProject(null);
       setSelectedTeamId(null);
+      setSelectedProjectView('overview');
+      setProjectReportTasks([]);
       setExpandedProjectTeamIds([]);
       setProjectTeamDetails({});
       setProjectTeamDetailsLoadingIds([]);
@@ -402,6 +455,55 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
     }
     void loadTeamWorkspace(selectedTeamId);
   }, [selectedTeamId]);
+
+  useEffect(() => {
+    if (!profile || !selectedProject || selectedProjectView !== 'tasks-report') {
+      return;
+    }
+
+    if (!isProjectOwner) {
+      setNotice({ kind: 'info', text: 'Отчет по задачам доступен владельцу проекта.' });
+      navigateToProject(selectedProject.uuid);
+    }
+  }, [isProjectOwner, profile, selectedProject, selectedProjectView]);
+
+  useEffect(() => {
+    if (!selectedProject || selectedProjectView !== 'tasks-report' || selectedTeamId || !isProjectOwner) {
+      setProjectReportTasks([]);
+      setProjectReportLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setProjectReportLoading(true);
+
+    void getProjectReportTasks(accessToken, selectedProject)
+      .then((nextTasks) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProjectReportTasks(nextTasks);
+        setDashboardError(null);
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setProjectReportTasks([]);
+        setDashboardError(error instanceof Error ? error.message : 'Не удалось загрузить отчет по задачам.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setProjectReportLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, isProjectOwner, selectedProject, selectedProjectView, selectedTeamId]);
 
   useEffect(() => {
     if (!selectedTask) {
@@ -779,6 +881,9 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
       const task = await action();
       await refreshTeam();
       await refreshSidebarData();
+      setProjectReportTasks((current) =>
+        current.map((currentTask) => currentTask.uuid === task.uuid ? task : currentTask),
+      );
       setSelectedTaskId(task.uuid);
     }, successMessage);
   }
@@ -807,10 +912,12 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
     if (!selectedTeam) return;
     await withAction('leave-team', async () => {
       await leaveTeam(accessToken, selectedTeam.uuid);
+      setSelectedTaskId(null);
+      setIsTeamManagementModalOpen(false);
+      navigateToProjects();
       await refreshProjects();
-      await refreshProject();
       await refreshSidebarData();
-      navigateToProject(selectedProjectId ?? selectedTeam.project.uuid);
+      setDashboardError(null);
     }, 'Вы покинули команду.');
   }
 
@@ -1053,8 +1160,8 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
           </div>
         </section> : null}
 
-        {currentPage === 'projects' && selectedProject && !selectedTeam ? <section className="workspace-panel">
-          <div className="project-summary-card project-summary-card--project"><div className="project-summary-card__content"><span className="board-header__eyebrow">Проект</span><strong>{selectedProject.title}</strong><p>{selectedProject.description ?? 'Описание проекта пока не заполнено.'}</p></div><div className="project-summary-card__actions project-summary-card__actions--row"><button type="button" className="secondary-button" onClick={navigateToProjects}>К проектам</button>{isProjectOwner ? <button type="button" className="secondary-button" onClick={() => void handleOpenProjectXpLogs()} disabled={xpLogsLoading}>{xpLogsLoading && isXpLogsModalOpen ? 'Загружаем логи...' : 'Логи XP'}</button> : null}{isProjectOwner ? <button type="button" className="primary-button" onClick={() => setIsCreateTeamModalOpen(true)}>Создать команду</button> : null}{canLeaveProject ? <button type="button" className="secondary-button" onClick={() => void handleLeaveProject()} disabled={busyAction === 'leave-project'}>Покинуть проект</button> : null}{isProjectOwner ? <button type="button" className="secondary-button secondary-button--danger" onClick={() => void handleDeleteProject()} disabled={busyAction === 'delete-project'}>Удалить проект</button> : null}</div></div>
+        {currentPage === 'projects' && selectedProject && !selectedTeam && selectedProjectView === 'overview' ? <section className="workspace-panel">
+          <div className="project-summary-card project-summary-card--project"><div className="project-summary-card__content"><span className="board-header__eyebrow">Проект</span><strong>{selectedProject.title}</strong><p>{selectedProject.description ?? 'Описание проекта пока не заполнено.'}</p></div><div className="project-summary-card__actions project-summary-card__actions--row"><button type="button" className="secondary-button" onClick={navigateToProjects}>К проектам</button>{isProjectOwner ? <button type="button" className="secondary-button" onClick={() => void handleOpenProjectXpLogs()} disabled={xpLogsLoading}>{xpLogsLoading && isXpLogsModalOpen ? 'Загружаем логи...' : 'Логи XP'}</button> : null}{isProjectOwner ? <button type="button" className="secondary-button" onClick={() => navigateToProjectTaskReport(selectedProject.uuid)}>Отчет по задачам</button> : null}{isProjectOwner ? <button type="button" className="primary-button" onClick={() => setIsCreateTeamModalOpen(true)}>Создать команду</button> : null}{canLeaveProject ? <button type="button" className="secondary-button" onClick={() => void handleLeaveProject()} disabled={busyAction === 'leave-project'}>Покинуть проект</button> : null}{isProjectOwner ? <button type="button" className="secondary-button secondary-button--danger" onClick={() => void handleDeleteProject()} disabled={busyAction === 'delete-project'}>Удалить проект</button> : null}</div></div>
 
           <div className="section-heading"><h3>Доступные команды</h3></div>
           {visibleProjectTeams.length ? <div className="workspace-grid workspace-grid--teams">{visibleProjectTeams.map((team) => {
@@ -1065,6 +1172,15 @@ function DashboardPage({ accessToken, onLogout }: DashboardPageProps) {
             return <article key={team.uuid} className="workspace-item-card team-showcase-card"><div className="team-showcase-card__top"><div className="team-showcase-card__identity"><span className="team-showcase-card__badge">Команда</span><strong>{team.name}</strong><p className="team-showcase-card__description">{team.description ?? 'Описание команды пока не заполнено.'}</p></div><button type="button" className="metric-chip metric-chip--interactive" onClick={() => void toggleProjectTeamParticipants(team.uuid)}>{team.members_count} участников</button></div><div className="team-showcase-card__footer"><button type="button" className="secondary-button" onClick={() => void toggleProjectTeamParticipants(team.uuid)}>{isExpanded ? 'Скрыть участников' : 'Показать участников'}</button><button type="button" className="primary-button" onClick={() => navigateToTeam(selectedProject.uuid, team.uuid)}>Открыть команду</button></div>{isExpanded ? <div className="team-showcase-card__participants">{projectTeamDetailsLoadingIds.includes(team.uuid) && !teamDetail ? <div className="team-showcase-card__participants-empty">Загружаем участников...</div> : participants.length ? participants.map((participant) => <button key={participant.uuid} type="button" className="team-showcase-card__participant" onClick={() => void openUserProfile(participant.uuid)}><AvatarImage src={participant.avatarUrl} alt={participant.fio} fallbackText={participant.fio.charAt(0).toUpperCase() || '?'} imageClassName="participant-avatar" fallbackClassName="participant-avatar participant-avatar--fallback" /><div className="team-showcase-card__participant-content"><div className="team-showcase-card__participant-identity"><strong>{participant.fio}</strong><span>@{participant.username}</span></div><div className="team-showcase-card__participant-meta"><span>{participant.roleLabel}</span><span>{participant.meta}</span></div></div></button>) : <div className="team-showcase-card__participants-empty">Участники не найдены.</div>}</div> : null}<div className="team-showcase-card__lead-block"><AvatarImage src={resolveAvatarUrl(teamDetail?.lead?.avatar_url ?? null)} alt={team.lead_name ?? 'Team lead'} fallbackText={(team.lead_name ?? 'Не назначен').charAt(0).toUpperCase() || '?'} imageClassName="team-showcase-card__lead-avatar-image" fallbackClassName="team-showcase-card__lead-avatar" /><div className="team-showcase-card__lead-content"><span className="team-showcase-card__lead-label">Тимлид</span><span className="team-showcase-card__lead-name">{team.lead_name ?? 'Не назначен'}</span></div></div></article>;
           })}</div> : <div className="sidebar-participants__empty">У вас нет команд в этом проекте.</div>}
         </section> : null}
+
+        {currentPage === 'projects' && selectedProject && !selectedTeam && selectedProjectView === 'tasks-report' && isProjectOwner ? <ProjectTaskReportPage
+          project={selectedProject}
+          tasks={projectReportTasks}
+          isLoading={projectReportLoading}
+          onBackToProject={() => navigateToProject(selectedProject.uuid)}
+          onBackToProjects={navigateToProjects}
+          onTaskSelect={setSelectedTaskId}
+        /> : null}
 
         {isCreateProjectModalOpen ? <ModalShell titleId="create-project-title" eyebrow="Проект" title="Создать проект" onClose={() => setIsCreateProjectModalOpen(false)}>
           <form className="workspace-form modal-card__form" onSubmit={handleCreateProject}>

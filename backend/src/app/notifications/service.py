@@ -51,18 +51,11 @@ class NotificationService:
         content: str,
     ) -> None:
 
-        unique_recipient_user_uuids: list[UUID] = []
-        seen_recipient_user_uuids: set[UUID] = set()
-
-        for recipient_user_uuid in recipient_user_uuids:
-            if sender_user_uuid is not None and recipient_user_uuid == sender_user_uuid:
-                continue
-            if recipient_user_uuid in seen_recipient_user_uuids:
-                continue
-
-            seen_recipient_user_uuids.add(recipient_user_uuid)
-            unique_recipient_user_uuids.append(recipient_user_uuid)
-
+        unique_recipient_user_uuids: set[UUID] = {
+            recipient_user_uuid for recipient_user_uuid in recipient_user_uuids
+            if sender_user_uuid and recipient_user_uuid != sender_user_uuid
+        }
+        
         if not unique_recipient_user_uuids:
             return
 
@@ -91,7 +84,7 @@ class NotificationService:
                         session,
                     )
 
-                    if notification is None or notification.recipient_user_uuid is None:
+                    if not notification or notification.recipient_user_uuid is None:
                         continue
                     
                     notification_ser = NotificationResponse(
