@@ -198,6 +198,7 @@ Backend:
 ```powershell
 cd backend/src
 uv sync
+uv run python -m unittest discover -s tests -v
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload --host localhost --port 8000
 ```
