@@ -4,18 +4,23 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func, text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
 from app.core import Base
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.users.model import User
 
 
 class UserAchievement(Base):
-
-    __tablename__ = "user_achievements"
 
     __table_args__ = (
         UniqueConstraint("user_uuid", "achievement_key", name="uq_user_achievements_user_key"),
