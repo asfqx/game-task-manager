@@ -16,6 +16,7 @@ from app.teams.model import Team, TeamMember
 from app.lvls.model import Lvl
 from app.tasks.model import Task
 from app.system_logging.model import UserActionLog, XpAccrualLog
+from app.achievements.model import UserAchievement
 
 config = context.config
 

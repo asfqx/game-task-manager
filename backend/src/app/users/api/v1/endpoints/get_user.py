@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
+from app.achievements.schema import AchievementResponse
 from app.core import DBSession, RateLimitErrorResponse
 from app.error_handler import error_schemas
 from app.users.dependency import AuthenticatedActiveUser
@@ -72,6 +73,22 @@ async def get_user_profile(
     session: DBSession,
 ) -> GetUserProfileResponse:
     return await UserService.get_user_profile(
+        current_user=user,
+        session=session,
+    )
+
+
+@router.get(
+    "/me/achievements",
+    status_code=status.HTTP_200_OK,
+    summary="Получить мои достижения",
+    response_model=list[AchievementResponse],
+)
+async def get_my_achievements(
+    user: AuthenticatedActiveUser,
+    session: DBSession,
+) -> list[AchievementResponse]:
+    return await UserService.get_my_achievements(
         current_user=user,
         session=session,
     )

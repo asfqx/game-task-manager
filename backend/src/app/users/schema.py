@@ -3,6 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.achievements.schema import AchievementResponse
 from app.enum import Gender
 from app.lvls.schema import LvlSummaryResponse
 
@@ -62,6 +63,7 @@ class GetUserProfileResponse(BaseModel):
     last_login_at: datetime | None = None
     teams: list[UserTeamSummaryResponse] = Field(default_factory=list)
     completed_tasks: list[UserCompletedTaskResponse] = Field(default_factory=list)
+    achievements: list[AchievementResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

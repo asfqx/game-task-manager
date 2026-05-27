@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.achievements.service import AchievementService
 from app.core import AsyncSessionLocal
 from app.enum import TaskStatus, UserRole
 from app.error_handler import handle_connection_errors, handle_model_errors
@@ -250,6 +251,12 @@ class TaskService:
                         task_uuid=task.uuid,
                     ),
                     session,
+                )
+
+                await AchievementService.sync_user_achievements(
+                    task.assignee_user_uuid,
+                    session,
+                    commit=False,
                 )
 
                 await session.commit()
