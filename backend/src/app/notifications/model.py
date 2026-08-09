@@ -41,4 +41,3 @@ class Notification(Base):
     )
 
 
-from app.users.model import User

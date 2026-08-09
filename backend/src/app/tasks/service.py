@@ -7,6 +7,7 @@ from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.achievements.service import AchievementService
 from app.core import AsyncSessionLocal
 from app.enum import TaskStatus, UserRole
 from app.error_handler import handle_connection_errors, handle_model_errors
@@ -252,6 +253,12 @@ class TaskService:
                     session,
                 )
 
+                await AchievementService.sync_user_achievements(
+                    task.assignee_user_uuid,
+                    session,
+                    commit=False,
+                )
+
                 await session.commit()
 
                 if previous_lvl_uuid != team_member.lvl_uuid and new_lvl is not None:
@@ -399,7 +406,7 @@ class TaskService:
         current_user: User,
         session: AsyncSession,
         background_tasks: BackgroundTasks | None = None,
-    ) -> TaskResponse:
+    ) -> Task:
 
         task = await cls._get_task_or_404(task_uuid, session)
 
@@ -471,7 +478,7 @@ class TaskService:
             task_uuid=task.uuid,
             details={"changed_fields": changed_fields},
         )
-
+        
         updated_task = await TaskRepository.update(
             task,
             TaskRepositoryUpdatePayload(**update_data),
@@ -522,7 +529,7 @@ class TaskService:
             task_uuid=task.uuid,
         )
 
-        updated_task = await TaskRepository.update(
+        return await TaskRepository.update(
             task,
             TaskRepositoryUpdatePayload(
                 status=TaskStatus.IN_WORK,
@@ -531,8 +538,6 @@ class TaskService:
             ),
             session,
         )
-
-        return updated_task
 
     @classmethod
     @handle_model_errors

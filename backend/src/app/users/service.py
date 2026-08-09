@@ -6,6 +6,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.s3 import s3_adapter
+from app.achievements.schema import AchievementResponse
+from app.achievements.service import AchievementService
 from app.constant import AVATARS_BUCKET
 from app.enum import UserRole
 from app.error_handler import handle_connection_errors, handle_model_errors
@@ -35,6 +37,7 @@ class UserService:
 
         teams = await TeamRepository.get_by_user(target_user.uuid, session)
         completed_tasks = await TaskRepository.get_completed_by_assignee(target_user.uuid, session)
+        achievements = await AchievementService.sync_user_achievements(target_user.uuid, session)
         visible_teams: list[dict] = []
 
         for team in teams:
@@ -98,6 +101,7 @@ class UserService:
                 }
                 for task in completed_tasks
             ],
+            "achievements": achievements,
         }
 
     @classmethod
@@ -130,6 +134,17 @@ class UserService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
 
         return await cls._build_user_profile_payload(exist_user, current_user, session)
+
+    @classmethod
+    @handle_model_errors
+    @handle_connection_errors
+    async def get_my_achievements(
+        cls,
+        current_user: User,
+        session: AsyncSession,
+    ) -> list[AchievementResponse]:
+
+        return await AchievementService.get_user_achievements(current_user.uuid, session)
 
     @classmethod
     @handle_model_errors

@@ -5,6 +5,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from app.core import AsyncSessionLocal
+from app.enum import TaskStatus
 from app.lvls.repository import LvlRepository
 from app.projects.filter import ProjectFilterQueryParams
 from app.projects.model import Project
@@ -45,7 +46,7 @@ async def seed_demo_workspace(owner: User) -> None:
     async with AsyncSessionLocal() as session:
         exist_owner = await UserRepository.get(owner.uuid, session)
         if exist_owner is None:
-            logger.error("Не удалось найти суперпользователя для заполнения стартовых данных")
+            logger.error("Unable to find superuser for demo seed")
             return
 
         seeded_users: dict[str, User] = {}
@@ -146,7 +147,7 @@ async def seed_demo_workspace(owner: User) -> None:
                 )
 
         now = dt.datetime.now(dt.UTC)
-        for title, description, assignee_username, xp_amount, deadline_days in DEMO_TASKS:
+        for title, description, assignee_username, xp_amount, deadline_days, status_value, completed_days_ago in DEMO_TASKS:
             assignee = seeded_users[assignee_username]
             existing_tasks = await TaskRepository.get_all(
                 TaskFilterQueryParams(
@@ -160,20 +161,61 @@ async def seed_demo_workspace(owner: User) -> None:
                 None,
             )
 
-            if task is not None:
-                continue
-
-            await TaskRepository.create(
-                Task(
-                    team_uuid=team.uuid,
-                    issuer_user_uuid=teamlead.uuid,
-                    assignee_user_uuid=assignee.uuid,
-                    title=title,
-                    description=description,
-                    xp_amount=xp_amount,
-                    deadline=now + dt.timedelta(days=deadline_days),
-                ),
-                session=session,
+            task_status = TaskStatus(status_value)
+            completed_at = (
+                now - dt.timedelta(days=completed_days_ago)
+                if task_status == TaskStatus.DONE and completed_days_ago is not None
+                else None
             )
 
-        logger.success("Стартовые проект, команда, пользователи и задачи подготовлены")
+            if task is None:
+                await TaskRepository.create(
+                    Task(
+                        team_uuid=team.uuid,
+                        issuer_user_uuid=teamlead.uuid,
+                        assignee_user_uuid=assignee.uuid,
+                        title=title,
+                        description=description,
+                        xp_amount=xp_amount,
+                        status=task_status,
+                        deadline=now + dt.timedelta(days=deadline_days),
+                        accepted_at=now - dt.timedelta(days=deadline_days + 1),
+                        submitted_for_review_at=completed_at,
+                        completed_at=completed_at,
+                    ),
+                    session=session,
+                )
+            else:
+                task.issuer_user_uuid = teamlead.uuid
+                task.assignee_user_uuid = assignee.uuid
+                task.description = description
+                task.xp_amount = xp_amount
+                task.status = task_status
+                task.deadline = now + dt.timedelta(days=deadline_days)
+                task.accepted_at = now - dt.timedelta(days=deadline_days + 1)
+                task.submitted_for_review_at = completed_at
+                task.completed_at = completed_at
+
+        xp_by_user_uuid = {user.uuid: 0 for user in seeded_users.values()}
+        for _, _, assignee_username, xp_amount, _, status_value, _ in DEMO_TASKS:
+            if TaskStatus(status_value) != TaskStatus.DONE:
+                continue
+
+            assignee = seeded_users[assignee_username]
+            xp_by_user_uuid[assignee.uuid] += xp_amount
+
+        for user_uuid, xp_amount in xp_by_user_uuid.items():
+            membership = await TeamRepository.get_membership(
+                team.uuid,
+                user_uuid,
+                session=session,
+            )
+            if membership is None:
+                continue
+
+            membership.xp_amount = xp_amount
+            lvl = await LvlRepository.get_for_xp(xp_amount, session)
+            membership.lvl_uuid = lvl.uuid if lvl else None
+
+        await session.commit()
+        logger.success("Demo project, team, users, tasks, achievements, and chart data are ready")

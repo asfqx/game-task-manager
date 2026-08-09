@@ -1,7 +1,7 @@
 DEMO_PROJECT_TITLE = "Demo Project"
-DEMO_PROJECT_DESCRIPTION = "Стартовый проект для демонстрации ролей, команд и задач."
+DEMO_PROJECT_DESCRIPTION = "Starter project for demo roles, teams, tasks, achievements, and reports."
 DEMO_TEAM_NAME = "Core Team"
-DEMO_TEAM_DESCRIPTION = "Основная команда стартового проекта."
+DEMO_TEAM_DESCRIPTION = "Main team for the starter project."
 
 DEMO_USERS: tuple[tuple[str, str, str], ...] = (
     ("teamlead1", "teamlead1@example.com", "TeamLead One"),
@@ -10,26 +10,47 @@ DEMO_USERS: tuple[tuple[str, str, str], ...] = (
     ("charlie8", "charlie8@example.com", "Charlie Ray"),
 )
 
-DEMO_TASKS: tuple[tuple[str, str, str, int, int], ...] = (
-    (
-        "Prepare backlog",
-        "Собрать и описать стартовый бэклог проекта.",
-        "alicework",
-        120,
-        3,
-    ),
-    (
-        "Design board",
-        "Подготовить структуру доски задач и статусов.",
-        "bobworker",
-        180,
-        5,
-    ),
-    (
-        "Setup notifications",
-        "Проверить уведомления и сценарии оповещений.",
-        "charlie8",
-        220,
-        7,
-    ),
+DEMO_TASKS: tuple[tuple[str, str, str, int, int, str, int | None], ...] = (
+    ("Prepare backlog", "Collect and describe the starter backlog.", "alicework", 120, -15, "DONE", 14),
+    ("Design board", "Prepare task board structure and statuses.", "bobworker", 180, -12, "DONE", 11),
+    ("Setup notifications", "Check notifications and alert flows.", "charlie8", 220, -9, "DONE", 8),
+    ("Tune dashboard filters", "Add quick filters for the task board.", "alicework", 160, -7, "DONE", 6),
+    ("Write onboarding checklist", "Prepare steps for new project members.", "bobworker", 140, -5, "DONE", 4),
+    ("Polish task cards", "Bring task cards to a consistent visual style.", "charlie8", 190, -3, "DONE", 2),
+    ("Audit access rules", "Check access rules for project and team pages.", "alicework", 260, -34, "DONE", 33),
+    ("Map user journeys", "Describe core user paths across the workspace.", "bobworker", 170, -31, "DONE", 30),
+    ("Clean task states", "Review task status transitions for the demo flow.", "charlie8", 150, -28, "DONE", 27),
+    ("Prepare QA checklist", "Create a compact checklist for manual testing.", "alicework", 230, -24, "DONE", 23),
+    ("Sync team roles", "Align team member roles and visible labels.", "bobworker", 210, -21, "DONE", 20),
+    ("Refine report cards", "Tune summary cards in the project report.", "charlie8", 180, -18, "DONE", 17),
+    ("Review XP balance", "Check XP values for starter tasks.", "alicework", 240, -14, "DONE", 13),
+    ("Test notification stream", "Verify real-time notification delivery.", "bobworker", 220, -11, "DONE", 10),
+    ("Improve empty states", "Polish empty states across workspace pages.", "charlie8", 160, -8, "DONE", 7),
+    ("Update profile drawer", "Check profile details and progress sections.", "alicework", 250, -6, "DONE", 5),
+    ("Validate report chart", "Check report chart data density.", "bobworker", 200, -4, "DONE", 3),
+    ("Finalize demo content", "Prepare final demo data pass.", "charlie8", 210, -2, "DONE", 1),
+    ("May 20 chart task A", "Demo task for the activity chart.", "bobworker", 80, -7, "DONE", 7),
+    ("May 20 chart task B", "Demo task for the activity chart.", "charlie8", 80, -7, "DONE", 7),
+    ("May 21 chart task A", "Demo task for the activity chart.", "bobworker", 80, -6, "DONE", 6),
+    ("May 21 chart task B", "Demo task for the activity chart.", "charlie8", 80, -6, "DONE", 6),
+    ("May 21 chart task C", "Demo task for the activity chart.", "alicework", 80, -6, "DONE", 6),
+    ("May 21 chart task D", "Demo task for the activity chart.", "bobworker", 80, -6, "DONE", 6),
+    ("May 22 chart task A", "Demo task for the activity chart.", "charlie8", 80, -5, "DONE", 5),
+    ("May 24 chart task A", "Demo task for the activity chart.", "alicework", 80, -3, "DONE", 3),
+    ("May 24 chart task B", "Demo task for the activity chart.", "bobworker", 80, -3, "DONE", 3),
+    ("May 24 chart task C", "Demo task for the activity chart.", "charlie8", 80, -3, "DONE", 3),
+    ("May 25 chart task A", "Demo task for the activity chart.", "alicework", 80, -2, "DONE", 2),
+    ("Daily refinement 10", "Close the tenth daily refinement task.", "alicework", 90, -10, "DONE", 10),
+    ("Daily refinement 9", "Close the ninth daily refinement task.", "alicework", 90, -9, "DONE", 9),
+    ("Daily refinement 8", "Close the eighth daily refinement task.", "alicework", 90, -8, "DONE", 8),
+    ("Daily refinement 7", "Close the seventh daily refinement task.", "alicework", 90, -7, "DONE", 7),
+    ("Daily refinement 6", "Close the sixth daily refinement task.", "alicework", 90, -6, "DONE", 6),
+    ("Daily refinement 5", "Close the fifth daily refinement task.", "alicework", 90, -5, "DONE", 5),
+    ("Daily refinement 4", "Close the fourth daily refinement task.", "alicework", 90, -12, "DONE", 12),
+    ("Daily refinement 3", "Close the third daily refinement task.", "alicework", 90, -3, "DONE", 3),
+    ("Daily refinement 2", "Close the second daily refinement task.", "alicework", 90, -2, "DONE", 2),
+    ("Daily refinement 1", "Close the first daily refinement task.", "alicework", 90, -1, "DONE", 1),
+    ("Check achievement copy", "Review achievement text and states.", "alicework", 210, 2, "ON_CHECK", None),
+    ("Prepare release notes", "Collect a short release summary.", "bobworker", 130, 4, "IN_WORK", None),
+    ("Review mobile layout", "Check key screens on mobile width.", "charlie8", 170, 7, "CREATED", None),
 )
